@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+*.Zone.Identifier
+
+# Conviction corpus — keep samples only, gitignore the rest per ARCHITECTURE.md §5
+data/convictions/*
+!data/convictions/.gitkeep
+!data/convictions/SAMPLE_*.md
