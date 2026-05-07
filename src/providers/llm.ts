@@ -1,41 +1,11 @@
-import type { z } from 'zod';
+import type { LanguageModel } from 'ai';
 
-export type Role = 'system' | 'user' | 'assistant';
-
-export type Message = {
-  role: Role;
-  content: string;
-};
-
-export type Usage = {
-  inputTokens: number;
-  outputTokens: number;
-};
-
-export type GenerateArgs = {
-  messages: Message[];
-  system?: string;
-  temperature?: number;
-  maxTokens?: number;
-};
-
-export type GenerateResult = {
-  text: string;
-  usage: Usage;
-};
-
-export type StreamChunk =
-  | { type: 'text-delta'; text: string }
-  | { type: 'finish'; usage: Usage };
-
-export type ClassifyArgs<T> = {
-  schema: z.ZodType<T>;
-  prompt: string;
-  system?: string;
-};
-
+/**
+ * Per ARCHITECTURE.md §8: providers expose AI SDK LanguageModel handles.
+ * The agent loop in agent/loop.ts is the single permitted user of `ai`'s
+ * generateText / tool primitives outside this layer.
+ */
 export interface LLMProvider {
-  generate(args: GenerateArgs): Promise<GenerateResult>;
-  stream(args: GenerateArgs): AsyncIterable<StreamChunk>;
-  classify<T>(args: ClassifyArgs<T>): Promise<T>;
+  agentModel: LanguageModel;
+  classifierModel: LanguageModel;
 }

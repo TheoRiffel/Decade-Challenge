@@ -4,7 +4,7 @@ dist/
 .env.local
 *.log
 .DS_Store
-*.Zone.Identifier
+*Zone.Identifier
 
 # Conviction corpus — keep samples only, gitignore the rest per ARCHITECTURE.md §5
 data/convictions/*

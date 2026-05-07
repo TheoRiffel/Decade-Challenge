@@ -21,6 +21,7 @@ export const documents = pgTable('documents', {
   filename: text('filename').notNull(),
   language: text('language').notNull(),
   title: text('title'),
+  summary: text('summary'),
   contentMd: text('content_md').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()

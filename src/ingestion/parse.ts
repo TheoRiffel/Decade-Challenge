@@ -1,4 +1,4 @@
-import type { Language } from '../pipeline/detectLanguage.js';
+export type Language = 'pt' | 'en' | 'other';
 
 export type ParsedDocument = {
   id: string;
