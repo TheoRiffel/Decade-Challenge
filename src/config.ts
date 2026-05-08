@@ -1,5 +1,11 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import { anthropicLLM, type LLMProvider } from './providers/llm.js';
+import {
+  teiEmbeddings,
+  type EmbeddingProvider,
+} from './providers/embeddings.js';
+import { teiReranker, type Reranker } from './providers/reranker.js';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -7,6 +13,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   COHERE_API_KEY: z.string().optional(),
+  EMBEDDINGS_BASE_URL: z.string().url().default('http://localhost:8080'),
+  RERANKER_BASE_URL: z.string().url().default('http://localhost:8081'),
   PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
@@ -23,11 +31,16 @@ export const config = {
     google: env.GOOGLE_GENERATIVE_AI_API_KEY,
     cohere: env.COHERE_API_KEY,
   },
+  endpoints: {
+    embeddingsBaseUrl: env.EMBEDDINGS_BASE_URL,
+    rerankerBaseUrl: env.RERANKER_BASE_URL,
+  },
   models: {
     agentModel: 'claude-sonnet-4-5',
     classifierModel: 'claude-haiku-4-5',
-    embeddingModel: 'text-embedding-3-large',
-    rerankerModel: 'rerank-multilingual-v3.0',
+    embeddingModel: 'BAAI/bge-m3',
+    embeddingDimensions: 1024,
+    rerankerModel: 'BAAI/bge-reranker-v2-m3',
   },
   retrieval: {
     denseK: 30,
@@ -41,3 +54,26 @@ export const config = {
 } as const;
 
 export type AppConfig = typeof config;
+
+/**
+ * Per ARCHITECTURE.md §8 / §18: provider selection lives only here. Switching
+ * the LLM, embedding, or reranker stack should be a one-line change in this
+ * file, not a refactor of agent/api/tools code. Alternative factories
+ * (openaiEmbeddings, cohereReranker, openaiLLM) remain in providers/ for
+ * portability.
+ */
+export const llm: LLMProvider = anthropicLLM({
+  agentModel: config.models.agentModel,
+  classifierModel: config.models.classifierModel,
+});
+
+export const embeddings: EmbeddingProvider = teiEmbeddings({
+  baseUrl: config.endpoints.embeddingsBaseUrl,
+  modelId: config.models.embeddingModel,
+  dimensions: config.models.embeddingDimensions,
+});
+
+export const reranker: Reranker = teiReranker({
+  baseUrl: config.endpoints.rerankerBaseUrl,
+  modelId: config.models.rerankerModel,
+});

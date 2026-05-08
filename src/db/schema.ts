@@ -38,7 +38,7 @@ export const chunks = pgTable(
     chunkIndex: integer('chunk_index').notNull(),
     content: text('content').notNull(),
     contextual: text('contextual').notNull(),
-    embedding: vector('embedding', { dimensions: 3072 }),
+    embedding: vector('embedding', { dimensions: 1024 }).notNull(),
     tsvPt: tsvector('tsv_pt'),
     tsvEn: tsvector('tsv_en'),
     metadata: jsonb('metadata'),

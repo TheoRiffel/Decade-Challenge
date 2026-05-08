@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { reranker } from '../config.js';
+import { tool } from '../providers/llm.js';
+import { hybridRetrieve } from '../retrieval/hybrid.js';
 
 export const searchConvictionsDescription =
   "Search Decade's conviction documents using hybrid (semantic + keyword) " +
@@ -30,8 +33,42 @@ export type SearchConvictionsHit = {
   score: number;
 };
 
-export async function executeSearchConvictions(
-  _input: SearchConvictionsInput,
-): Promise<SearchConvictionsHit[]> {
-  throw new Error('not implemented');
-}
+const CANDIDATE_POOL_SIZE = 30;
+
+export const searchConvictionsTool = tool({
+  description: searchConvictionsDescription,
+  parameters: searchConvictionsInputSchema,
+  execute: async ({
+    query,
+    language_hint,
+    top_k,
+  }): Promise<SearchConvictionsHit[]> => {
+    const candidates = await hybridRetrieve({
+      query,
+      languageHint: language_hint,
+      topK: CANDIDATE_POOL_SIZE,
+    });
+    if (candidates.length === 0) return [];
+
+    const ranked = await reranker.rerank(
+      query,
+      candidates.map((c) => c.content),
+      top_k,
+    );
+
+    return ranked.map((r) => {
+      const chunk = candidates[r.index];
+      if (!chunk) {
+        throw new Error(
+          `reranker returned out-of-range index ${r.index} (pool=${candidates.length})`,
+        );
+      }
+      return {
+        document_id: chunk.documentId,
+        chunk_id: chunk.chunkId,
+        content: chunk.content,
+        score: r.score,
+      };
+    });
+  },
+});

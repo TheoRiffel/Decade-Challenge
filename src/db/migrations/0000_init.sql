@@ -1,8 +1,9 @@
--- Initial schema. Mirrors ARCHITECTURE.md §6 verbatim.
--- NOTE: pgvector's HNSW currently caps at 2000 dims for `vector` (4000 for `halfvec`).
--- The 3072-dim embedding column is created here as specified, but the HNSW index
--- below will fail on pgvector ≤0.8 with VECTOR(3072). If that happens, the
--- documented swap is `halfvec(3072)` — flagged as a deviation in README.
+-- Initial schema. Mirrors ARCHITECTURE.md §6.
+-- Embedding dimensions = 1024 to match BAAI/bge-m3 (the v1 default embedder).
+-- Within pgvector's 2000-dim HNSW cap on the `vector` type, so the HNSW
+-- index below works without halfvec. If the embedder is swapped to a model
+-- with > 2000 dims, switch the column to `halfvec(N)` and the op class to
+-- `halfvec_cosine_ops`.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -21,7 +22,7 @@ CREATE TABLE chunks (
   chunk_index   INT NOT NULL,
   content       TEXT NOT NULL,
   contextual    TEXT NOT NULL,
-  embedding     VECTOR(3072),
+  embedding     VECTOR(1024) NOT NULL,
   tsv_pt        TSVECTOR,
   tsv_en        TSVECTOR,
   metadata      JSONB

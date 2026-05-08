@@ -1,4 +1,8 @@
+import { ilike, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
+import { db } from '../db/index.js';
+import { documents } from '../db/schema.js';
+import { tool } from '../providers/llm.js';
 
 export const listDocumentsDescription =
   'List all available conviction documents with their titles and one-line ' +
@@ -21,8 +25,29 @@ export type ListDocumentsEntry = {
   summary: string | null;
 };
 
-export async function executeListDocuments(
-  _input: ListDocumentsInput,
-): Promise<ListDocumentsEntry[]> {
-  throw new Error('not implemented');
-}
+export const listDocumentsTool = tool({
+  description: listDocumentsDescription,
+  parameters: listDocumentsInputSchema,
+  execute: async ({ topic_filter }): Promise<ListDocumentsEntry[]> => {
+    const where: SQL | undefined =
+      topic_filter && topic_filter.trim().length > 0
+        ? or(
+            ilike(documents.title, `%${topic_filter}%`),
+            ilike(documents.summary, `%${topic_filter}%`),
+          )
+        : undefined;
+
+    const rows = await db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        language: documents.language,
+        summary: documents.summary,
+      })
+      .from(documents)
+      .where(where)
+      .orderBy(documents.id);
+
+    return rows;
+  },
+});

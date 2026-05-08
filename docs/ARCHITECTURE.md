@@ -56,10 +56,10 @@ The architecture is built around a tool-using LLM that decides when to retrieve,
 - **LLM abstraction:** Vercel AI SDK (`ai` package + provider packages `@ai-sdk/anthropic`, `@ai-sdk/openai`, `@ai-sdk/google`). The AI SDK's `generateText` with `tools` and `stopWhen` is the agent loop primitive.
 - **Default model:** Claude Sonnet 4.5 (`anthropic('claude-sonnet-4-5')`) for the agent loop.
 - **Cheap model:** Claude Haiku 4.5 for ingestion-time contextualization.
-- **Embeddings:** OpenAI `text-embedding-3-large` (3072 dims, multilingual, swappable).
-- **Vector store:** Postgres + `pgvector`. HNSW index. Drizzle ORM.
+- **Embeddings:** `BAAI/bge-m3` (1024 dims, multilingual) served via HF Text Embeddings Inference (TEI). Wrapped behind an `EmbeddingProvider` interface; an OpenAI factory remains for portability.
+- **Vector store:** Postgres + `pgvector`. HNSW index (within the 2000-dim cap thanks to bge-m3's 1024 dims). Drizzle ORM.
 - **Sparse search:** Postgres `tsvector` with `portuguese` and `english` configurations.
-- **Reranker:** Cohere Rerank 3.5 (multilingual) wrapped behind a `Reranker` interface.
+- **Reranker:** `BAAI/bge-reranker-v2-m3` served via HF Text Embeddings Inference. Wrapped behind a `Reranker` interface; a Cohere factory remains for portability.
 - **PDF parsing (uploads):** `unpdf` for v1. Docling/LlamaParse flagged as v2.
 - **Excel parsing (uploads):** `xlsx` (SheetJS) for v1.
 - **Validation:** Zod schemas for request/response and tool input/output schemas.
@@ -180,7 +180,7 @@ CREATE TABLE chunks (
   chunk_index   INT NOT NULL,
   content       TEXT NOT NULL,
   contextual    TEXT NOT NULL,              -- chunk + LLM-generated context
-  embedding     VECTOR(3072),
+  embedding     VECTOR(1024),
   tsv_pt        TSVECTOR,
   tsv_en        TSVECTOR,
   metadata      JSONB
@@ -429,7 +429,7 @@ Run via `npm run ingest`. Idempotent.
 3. **Generate summary** (1–2 sentences) per document via Haiku — used by `list_documents`.
 4. Chunk by Markdown structure: split on H2/H3, target 500–800 tokens, sliding window fallback.
 5. Contextualize each chunk via Haiku with Anthropic prompt caching on the parent document (~90% cost reduction on repeated chunks of the same doc).
-6. Embed `contextual` text via `text-embedding-3-large`.
+6. Embed `contextual` text via BAAI/bge-m3 (1024 dims).
 7. Insert `documents` (with `summary`) and `chunks` rows. Compute `tsv_pt` and `tsv_en`.
 8. Sanity-check query at the end.
 
@@ -443,7 +443,7 @@ Used by the `search_convictions` tool, not directly by the agent loop.
 2. Dense top 30 via pgvector cosine similarity.
 3. Sparse top 30 via `ts_rank_cd` against the `language_hint`-matching tsvector (or both languages unioned if hint is `auto` or unmatched).
 4. RRF fusion (`k=60`, equal weights). Output top 30.
-5. Cohere Rerank 3.5 → top 8 (or whatever the tool's `top_k` argument requested).
+5. bge-reranker-v2-m3 → top 8 (or whatever the tool's `top_k` argument requested).
 
 Tunable via `config.ts`.
 
@@ -509,7 +509,7 @@ The agentic shape is durable. Most evolutions are tool additions, not architectu
 
 ## 19. Pragmatic Limitations to Flag in README
 
-- Cohere Rerank is a managed API → flag rate limits and propose self-hosted `bge-reranker-v2-m3` as a swap.
+- Reranker and embeddings are self-hosted via HF Text Embeddings Inference (BAAI/bge-m3, BAAI/bge-reranker-v2-m3). No managed-API rate limits, but ops responsibility for the TEI containers; CPU inference is workable for v1's corpus (~600 chunks) but GPU is recommended at scale.
 - Single-Postgres deployment doesn't scale past ~1M chunks → flag horizontal-scale path.
 - Eval harness uses LLM-as-judge → flag the cost; propose RAGAS or ARES for v2.
 - File uploads are in-memory only → flag the path to ephemeral per-session indexes.
