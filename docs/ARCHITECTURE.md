@@ -449,15 +449,60 @@ Tunable via `config.ts`.
 
 ## 15. File Uploads (Bonus)
 
-`POST /chat` accepts multipart with optional file attachments. Per-request flow:
+`POST /chat` accepts either `application/json` (no uploads) or `multipart/form-data`
+(with optional file attachments). The form fields are:
 
-1. Parse PDF with `unpdf`, XLSX with `xlsx` (each sheet → Markdown table).
-2. Register parsed content in an in-memory upload session keyed by request ID. Each upload gets a `file_id`.
-3. Inject a system message into the agent context: *"The user has uploaded the following files in this turn: [filename, file_id, brief description]. You can read them via the parse_upload tool."*
-4. The agent decides whether and when to call `parse_upload`.
-5. After the request completes, drop the session. Files are never persisted.
+| Field | Type | Description |
+|---|---|---|
+| `messages` | string (JSON) | Same schema as the JSON body |
+| `requestId` | string (optional) | Same as JSON body |
+| `files` | File (repeatable) | PDF or Excel attachments |
 
-For files larger than ~50K tokens, truncate on parse with a note in the description. v2 will route large uploads to per-session ephemeral vector indexes.
+**Per-request flow:**
+
+1. API layer enforces a **25 MB hard limit per file** and rejects unsupported types
+   with HTTP 415 before any parsing begins.
+2. Files are parsed via a `FileParser` selected by `UPLOAD_PARSER` env var
+   (`'anthropic'` default, `'local'` fallback):
+   - **`LocalFileParser`** — `unpdf` for PDFs (page count tracked), SheetJS for Excel
+     (each sheet → Markdown table, sheet count tracked). Runs in-process; no API calls.
+   - **`AnthropicNativeFileParser`** — sends PDFs to Claude (`classifierModel`) as a
+     `FilePart` document block and returns the model-extracted text. Excel always falls
+     back to SheetJS. Throws `FileParseError('too_large')` when the PDF exceeds
+     Anthropic's 32 MB / 100-page cap, triggering automatic retry with `LocalFileParser`.
+3. Each parsed file is registered in an in-memory `UploadSession` with a UUID `file_id`.
+   Content is flat (`string`); `ParsedContent` internals (including `pageCount` /
+   `sheetCount`) are recorded to the trace but not exposed to the agent.
+4. Parse latency, parser used, truncation status, and page/sheet counts are written to
+   `trace.fileParses` before the agent loop starts.
+5. The file listing is injected into the agent's system prompt:
+   ```
+   - file_id: "<uuid>"  filename: report.pdf  type: PDF document
+   ```
+   The `parse_upload` tool is registered only when uploads are present.
+6. The agent decides whether and when to call `parse_upload(file_id)`.
+7. Upload citations in `Sources:` use the prefix `uploaded/<filename>`. The validation
+   layer allows them only when `parse_upload` was actually called for that file; uncalled
+   uploads are stripped like any other hallucinated source.
+8. After the request completes the session is garbage-collected. Files are never persisted.
+
+**Truncation:** content exceeding ~50 K tokens (200 K chars) is cut with an inline note.
+v2 will route large uploads to per-session ephemeral vector indexes.
+
+**Out of scope for v1:** OCR for image-only PDFs, DOCX/CSV/plain-text, native OpenAI or
+Gemini File API parsers, persistent file storage. All flagged as easy v2 additions.
+
+**Key files:**
+
+| File | Role |
+|---|---|
+| `uploads/parse.ts` | `UploadedFile`, `ParsedContent`, `FileParseError`, `FileParser` interface |
+| `uploads/local.ts` | `LocalFileParser` — in-process PDF + Excel |
+| `uploads/anthropic.ts` | `AnthropicNativeFileParser` — Anthropic FilePart + SheetJS fallback |
+| `uploads/factory.ts` | `createFileParser(type, llm)` — parser selection + `too_large` fallback wrapper |
+| `uploads/session.ts` | `createUploadSession()` — in-memory file registry |
+| `tools/parseUpload.ts` | `parse_upload` tool — reads from session, surfaces `truncated` flag |
+| `api/chat.ts` | Multipart handler, 25 MB limit, trace wiring |
 
 ## 16. Observability
 

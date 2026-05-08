@@ -6,6 +6,16 @@ import { randomUUID } from 'node:crypto';
  * in-memory; step 8 (observability) ships JSONL to disk and/or Langfuse.
  */
 
+export type FileParseRecord = {
+  filename: string;
+  mimeType: string;
+  parser: 'local' | 'anthropic';
+  latencyMs: number;
+  truncated: boolean;
+  pageCount?: number;
+  sheetCount?: number;
+};
+
 export type ToolCallRecord = {
   toolName: string;
   input: unknown;
@@ -33,6 +43,7 @@ export type TraceSnapshot = {
   finishedAt: string;
   userMessage: string;
   detectedLanguage: 'pt' | 'en' | 'other' | null;
+  fileParses: FileParseRecord[];
   steps: AgentStepRecord[];
   finalResponse: string;
   validation: ValidationResult | null;
@@ -49,6 +60,7 @@ type RawStep = {
 
 export interface Trace {
   readonly requestId: string;
+  recordFileParse(record: FileParseRecord): void;
   recordStep(step: RawStep): void;
   recordValidation(result: ValidationResult): void;
   recordTokens(usage: { inputTokens: number; outputTokens: number }): void;
@@ -62,6 +74,7 @@ class TraceImpl implements Trace {
   readonly requestId: string;
   private readonly userMessage: string;
   private readonly startedAt: string;
+  private readonly fileParses: FileParseRecord[] = [];
   private readonly steps: AgentStepRecord[] = [];
   private detectedLanguage: 'pt' | 'en' | 'other' | null = null;
   private validation: ValidationResult | null = null;
@@ -73,6 +86,10 @@ class TraceImpl implements Trace {
     this.userMessage = args.userMessage;
     this.startedAt = new Date().toISOString();
     this.lastStepStartMs = performance.now();
+  }
+
+  recordFileParse(record: FileParseRecord): void {
+    this.fileParses.push(record);
   }
 
   recordStep(step: RawStep): void {
@@ -131,6 +148,7 @@ class TraceImpl implements Trace {
       finishedAt: new Date().toISOString(),
       userMessage: this.userMessage,
       detectedLanguage: this.detectedLanguage,
+      fileParses: [...this.fileParses],
       steps: this.steps.map((s) => ({
         stepIndex: s.stepIndex,
         toolCalls: s.toolCalls.map((c) => ({ ...c })),

@@ -47,7 +47,15 @@ export async function runAgent(args: AgentArgs): Promise<AgentResult> {
   trace.setDetectedLanguage(detectLanguage(userMessage));
 
   const tools = buildTools(uploads ? { trace, uploads } : { trace });
-  const system = agentSystemPrompt({ hasUploads: uploads !== undefined });
+  const uploadedFiles = uploads?.list().map((u) => ({
+    fileId: u.fileId,
+    filename: u.filename,
+    mimeType: u.mimeType,
+    truncated: u.truncated,
+  }));
+  const system = agentSystemPrompt(
+    uploadedFiles ? { uploadedFiles } : {},
+  );
 
   const conversationMessages: CoreMessage[] = messages
     .filter((m) => m.role !== 'system')

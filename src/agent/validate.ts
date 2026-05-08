@@ -97,7 +97,16 @@ function collectReturnedDocIds(trace: Trace): Set<string> {
   const ids = new Set<string>();
   for (const step of trace.getSteps()) {
     for (const call of step.toolCalls) {
-      collectFromValue(call.output, ids);
+      if (call.toolName === 'parse_upload') {
+        // Upload citations use the "uploaded/<filename>" prefix (per system prompt).
+        // Only allow them if the agent actually called parse_upload and got a result.
+        const out = call.output;
+        if (typeof out === 'object' && out !== null && typeof (out as Record<string, unknown>)['filename'] === 'string') {
+          ids.add(`uploaded/${(out as Record<string, unknown>)['filename'] as string}`);
+        }
+      } else {
+        collectFromValue(call.output, ids);
+      }
     }
   }
   return ids;

@@ -6,6 +6,8 @@ import {
   type EmbeddingProvider,
 } from './providers/embeddings.js';
 import { teiReranker, type Reranker } from './providers/reranker.js';
+import { createFileParser } from './uploads/factory.js';
+import type { FileParser } from './uploads/parse.js';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -15,6 +17,7 @@ const envSchema = z.object({
   COHERE_API_KEY: z.string().optional(),
   EMBEDDINGS_BASE_URL: z.string().url().default('http://localhost:8080'),
   RERANKER_BASE_URL: z.string().url().default('http://localhost:8081'),
+  UPLOAD_PARSER: z.enum(['local', 'anthropic']).default('anthropic'),
   PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   TRACE_FILE: z.string().default('./logs/traces.jsonl'),
@@ -55,6 +58,9 @@ export const config = {
   agent: {
     maxSteps: 10,
   },
+  uploads: {
+    parser: env.UPLOAD_PARSER,
+  },
 } as const;
 
 export type AppConfig = typeof config;
@@ -81,3 +87,5 @@ export const reranker: Reranker = teiReranker({
   baseUrl: config.endpoints.rerankerBaseUrl,
   modelId: config.models.rerankerModel,
 });
+
+export const fileParser: FileParser = createFileParser(config.uploads.parser, llm);
