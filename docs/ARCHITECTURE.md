@@ -59,7 +59,7 @@ The architecture is built around a tool-using LLM that decides when to retrieve,
 - **Embeddings:** `BAAI/bge-m3` (1024 dims, multilingual) served via HF Text Embeddings Inference (TEI). Wrapped behind an `EmbeddingProvider` interface; an OpenAI factory remains for portability.
 - **Vector store:** Postgres + `pgvector`. HNSW index (within the 2000-dim cap thanks to bge-m3's 1024 dims). Drizzle ORM.
 - **Sparse search:** Postgres `tsvector` with `portuguese` and `english` configurations.
-- **Reranker:** `BAAI/bge-reranker-v2-m3` served via HF Text Embeddings Inference. Wrapped behind a `Reranker` interface; a Cohere factory remains for portability.
+- **Reranker:** `BAAI/bge-reranker-base` (multilingual, 278M params, ONNX) served via HF Text Embeddings Inference. v1 swapped from `bge-reranker-v2-m3` because the v2-m3 weights ship safetensors-only and candle's CPU runtime needs ~9 GB RSS, OOM'ing alongside bge-m3 in a typical WSL2/laptop setup. Wrapped behind a `Reranker` interface; a Cohere factory remains for portability, and bge-reranker-v2-m3 remains a one-line config swap once a GPU runtime is on the table.
 - **PDF parsing (uploads):** `unpdf` for v1. Docling/LlamaParse flagged as v2.
 - **Excel parsing (uploads):** `xlsx` (SheetJS) for v1.
 - **Validation:** Zod schemas for request/response and tool input/output schemas.
@@ -443,7 +443,7 @@ Used by the `search_convictions` tool, not directly by the agent loop.
 2. Dense top 30 via pgvector cosine similarity.
 3. Sparse top 30 via `ts_rank_cd` against the `language_hint`-matching tsvector (or both languages unioned if hint is `auto` or unmatched).
 4. RRF fusion (`k=60`, equal weights). Output top 30.
-5. bge-reranker-v2-m3 → top 8 (or whatever the tool's `top_k` argument requested).
+5. bge-reranker-base → top 8 (or whatever the tool's `top_k` argument requested).
 
 Tunable via `config.ts`.
 

@@ -1,6 +1,7 @@
-import { sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { config, embeddings } from '../config.js';
 import { db } from '../db/index.js';
+import { chunks as chunksTable, documents as documentsTable } from '../db/schema.js';
 import { denseSearch, type DenseHit } from './pgvector.js';
 import { sparseSearch, type LanguageHint, type SparseHit } from './tsvector.js';
 
@@ -97,17 +98,16 @@ export async function hybridRetrieve(
   if (fused.length === 0) return [];
 
   const ids = fused.map((f) => f.chunkId);
-  const rows = await db.execute<{
-    id: string;
-    document_id: string;
-    content: string;
-    filename: string;
-  }>(sql`
-    SELECT c.id, c.document_id, c.content, d.filename
-    FROM chunks c
-    JOIN documents d ON d.id = c.document_id
-    WHERE c.id = ANY(${ids})
-  `);
+  const rows = await db
+    .select({
+      id: chunksTable.id,
+      documentId: chunksTable.documentId,
+      content: chunksTable.content,
+      filename: documentsTable.filename,
+    })
+    .from(chunksTable)
+    .innerJoin(documentsTable, eq(documentsTable.id, chunksTable.documentId))
+    .where(inArray(chunksTable.id, ids));
 
   const byId = new Map<
     string,
@@ -115,7 +115,7 @@ export async function hybridRetrieve(
   >();
   for (const r of rows) {
     byId.set(r.id, {
-      documentId: r.document_id,
+      documentId: r.documentId,
       content: r.content,
       filename: r.filename,
     });

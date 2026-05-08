@@ -1,1 +1,97 @@
-[]
+[
+  {
+    "id": "pt_inscope_cdb_basic",
+    "query": "O que é um CDB e como funciona?",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "pt",
+    "expectedDocumentIds": ["cdbs_quick_guide"]
+  },
+  {
+    "id": "pt_inscope_tesouro_ipca",
+    "query": "Como funcionam os títulos IPCA+ do Tesouro Direto?",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "pt",
+    "expectedDocumentIds": ["tesouro_direto_estrategias_avancadas", "ntnb_titulos_guia"]
+  },
+  {
+    "id": "pt_inscope_compare_cdb_cra",
+    "query": "Compare CDB e CRA em termos de tributação e garantias.",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "pt",
+    "expectedDocumentIds": ["cdbs_quick_guide", "cra_cri_agribusiness_bonds"]
+  },
+  {
+    "id": "pt_inscope_fii",
+    "query": "Quais são os principais tipos de Fundos Imobiliários e como avaliá-los?",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "pt",
+    "expectedDocumentIds": ["fundos_imobiliarios_completo"]
+  },
+  {
+    "id": "en_inscope_bdr",
+    "query": "What is a BDR and how does it work for Brazilian investors?",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "en",
+    "expectedDocumentIds": ["bdrs_investing_guide"]
+  },
+  {
+    "id": "en_inscope_smallcaps",
+    "query": "Summarize the investment thesis for Brazilian small caps.",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "en",
+    "expectedDocumentIds": ["small_caps_investment_thesis"]
+  },
+  {
+    "id": "en_inscope_crypto_tax",
+    "query": "How is cryptocurrency taxed in Brazil?",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "en",
+    "expectedDocumentIds": ["crypto_taxation_brazil"]
+  },
+  {
+    "id": "en_inscope_novo_mercado",
+    "query": "What does the Novo Mercado segment require for listed companies?",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "en",
+    "expectedDocumentIds": ["corporate_governance_levels_b3"]
+  },
+  {
+    "id": "crosslang_pt_user_en_doc",
+    "query": "Resuma a tese de investimento em small caps brasileiras.",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "pt",
+    "expectedDocumentIds": ["small_caps_investment_thesis"]
+  },
+  {
+    "id": "crosslang_en_user_pt_doc",
+    "query": "How does Tesouro Direto work, and which bonds are most popular?",
+    "expectedScope": "in_scope",
+    "expectedLanguage": "en",
+    "expectedDocumentIds": ["tesouro_direto_estrategias_avancadas"]
+  },
+  {
+    "id": "oos_boiling_water",
+    "query": "What is the boiling point of water at sea level?",
+    "expectedScope": "out_of_scope",
+    "expectedLanguage": "en"
+  },
+  {
+    "id": "oos_recipe_pt",
+    "query": "Me dê uma receita simples de feijoada para 4 pessoas.",
+    "expectedScope": "out_of_scope",
+    "expectedLanguage": "pt"
+  },
+  {
+    "id": "oos_sports_pt",
+    "query": "Quem ganhou a Copa do Mundo de 2002?",
+    "expectedScope": "out_of_scope",
+    "expectedLanguage": "pt"
+  },
+  {
+    "id": "borderline_btc_timing",
+    "query": "Should I buy Bitcoin now? What does Decade think about crypto market timing?",
+    "expectedScope": "borderline",
+    "expectedLanguage": "en",
+    "expectedDocumentIds": ["crypto_taxation_brazil"]
+  }
+]

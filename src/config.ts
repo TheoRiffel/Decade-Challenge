@@ -44,7 +44,7 @@ export const config = {
     classifierModel: 'claude-haiku-4-5',
     embeddingModel: 'BAAI/bge-m3',
     embeddingDimensions: 1024,
-    rerankerModel: 'BAAI/bge-reranker-v2-m3',
+    rerankerModel: 'BAAI/bge-reranker-base',
   },
   retrieval: {
     denseK: 30,
