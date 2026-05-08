@@ -17,6 +17,7 @@ const envSchema = z.object({
   RERANKER_BASE_URL: z.string().url().default('http://localhost:8081'),
   PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  TRACE_FILE: z.string().default('./logs/traces.jsonl'),
 });
 
 const env = envSchema.parse(process.env);
@@ -34,6 +35,9 @@ export const config = {
   endpoints: {
     embeddingsBaseUrl: env.EMBEDDINGS_BASE_URL,
     rerankerBaseUrl: env.RERANKER_BASE_URL,
+  },
+  observability: {
+    traceFile: env.TRACE_FILE,
   },
   models: {
     agentModel: 'claude-sonnet-4-5',

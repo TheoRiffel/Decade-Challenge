@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { runAgent } from '../agent/loop.js';
+import { traceSink } from '../observability/index.js';
 import { createTrace } from '../observability/trace.js';
 
 const messageSchema = z.object({
@@ -57,9 +58,7 @@ chatRouter.post('/', async (c) => {
 
   try {
     const result = await runAgent({ messages, trace });
-    console.log(
-      JSON.stringify({ event: 'chat', trace: result.trace }),
-    );
+    await traceSink.write(result.trace);
     return c.json({
       response: result.response,
       validation: result.validation,
@@ -67,6 +66,8 @@ chatRouter.post('/', async (c) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const partialSnapshot = trace.finish(`<error: ${message}>`);
+    await traceSink.write(partialSnapshot).catch(() => undefined);
     console.error(
       JSON.stringify({
         event: 'chat_error',
