@@ -1,13 +1,36 @@
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
+ui/node_modules/
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
 dist/
+ui/.next/
+ui/dist/
+*.tsbuildinfo
+
+# ── Drizzle-kit generated artifacts (hand-rolled migrations take precedence) ──
+drizzle/
+
+# ── Environment files ─────────────────────────────────────────────────────────
 .env
 .env.local
-*.log
-logs/
-.DS_Store
-*Zone.Identifier
+.env.*.local
 
-# Conviction corpus — keep samples only, gitignore the rest per ARCHITECTURE.md §5
+# ── Runtime outputs ───────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*Zone.Identifier
+.idea/
+.vscode/
+
+# ── Claude Code (local settings only — settings.json is committed) ────────────
+.claude/settings.local.json
+
+# ── Conviction corpus — keep samples only ─────────────────────────────────────
 data/convictions/*
 !data/convictions/.gitkeep
 !data/convictions/SAMPLE_*.md
