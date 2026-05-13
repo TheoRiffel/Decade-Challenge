@@ -1,6 +1,7 @@
 'use client';
 
-import { Check, FileText, List, Search, Upload } from 'lucide-react';
+import { useState } from 'react';
+import { Check, ChevronRight, FileText, List, Search, Upload } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ToolInvocation, ToolInvocationUIPart } from '@ai-sdk/ui-utils';
 
@@ -29,11 +30,13 @@ function isErrorResult(v: unknown): v is { error: string } {
 
 function loadingLabel(toolName: string, args: Record<string, unknown>): string {
   switch (toolName) {
-    case 'search_convictions':
-      return 'Searching convictions…';
+    case 'search_convictions': {
+      const q = typeof args['query'] === 'string' ? args['query'] : '';
+      return clamp(`Searching: "${q}"`);
+    }
     case 'read_document': {
       const id = typeof args['document_id'] === 'string' ? args['document_id'] : '';
-      return clamp(`Reading document: ${id}`);
+      return clamp(`Reading: ${id}`);
     }
     case 'list_documents':
       return 'Browsing catalog…';
@@ -52,11 +55,13 @@ function resultLabel(
   switch (toolName) {
     case 'search_convictions': {
       if (isErrorResult(result)) return 'Search unavailable';
-      if (!Array.isArray(result) || result.length === 0) return 'No results found';
+      const q = typeof args['query'] === 'string' ? args['query'] : '';
+      if (!Array.isArray(result) || result.length === 0)
+        return clamp(`"${q}" — no results`);
       const hits = result as Array<{ document_id?: unknown }>;
       const n = hits.length;
       const m = new Set(hits.map((h) => h.document_id).filter(Boolean)).size;
-      return `Found ${n} chunk${n !== 1 ? 's' : ''} across ${m} doc${m !== 1 ? 's' : ''}`;
+      return clamp(`"${q}" — ${n} chunk${n !== 1 ? 's' : ''} across ${m} doc${m !== 1 ? 's' : ''}`);
     }
     case 'read_document': {
       if (isErrorResult(result)) return 'Document not found';
@@ -64,7 +69,7 @@ function resultLabel(
       const fallbackId =
         typeof args['document_id'] === 'string' ? args['document_id'] : '';
       const title = typeof r['title'] === 'string' && r['title'] ? r['title'] : fallbackId;
-      return clamp(`Loaded ${title}`);
+      return clamp(`Loaded "${title}"`);
     }
     case 'list_documents': {
       if (isErrorResult(result)) return 'Catalog unavailable';
@@ -85,12 +90,11 @@ function resultLabel(
   }
 }
 
-// ── Item ──────────────────────────────────────────────────────────────────────
+// ── Single step ───────────────────────────────────────────────────────────────
 
-function ToolInvocationItem({ invocation }: { invocation: ToolInvocation }) {
+function ToolStep({ invocation }: { invocation: ToolInvocation }) {
   const isDone = invocation.state === 'result';
   const Icon = getIcon(invocation.toolName);
-
   const args = (invocation.args ?? {}) as Record<string, unknown>;
   const result = isDone ? (invocation as { result: unknown }).result : undefined;
 
@@ -101,7 +105,7 @@ function ToolInvocationItem({ invocation }: { invocation: ToolInvocation }) {
   return (
     <div className="flex items-center gap-1.5 py-0.5">
       <Icon className="w-3 h-3 flex-shrink-0 text-slate-400" />
-      <span className="flex-1 min-w-0 truncate text-slate-500">{label}</span>
+      <span className="flex-1 min-w-0 truncate text-slate-500 text-xs">{label}</span>
       {isDone ? (
         <Check className="w-3 h-3 flex-shrink-0 text-emerald-500" />
       ) : (
@@ -113,21 +117,48 @@ function ToolInvocationItem({ invocation }: { invocation: ToolInvocation }) {
 
 // ── List (exported) ───────────────────────────────────────────────────────────
 
-export function ToolInvocationList({
-  parts,
-}: {
-  parts: ToolInvocationUIPart[];
-}) {
+export function ToolInvocationList({ parts }: { parts: ToolInvocationUIPart[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+
   if (parts.length === 0) return null;
 
+  const hasRunning = parts.some((p) => p.toolInvocation.state !== 'result');
+  const n = parts.length;
+
+  // While tools are still running: show live steps inline (no toggle)
+  if (hasRunning) {
+    return (
+      <div className="mb-3 pl-2.5 border-l-2 border-slate-200 space-y-0.5">
+        {parts.map((p) => (
+          <ToolStep key={p.toolInvocation.toolCallId} invocation={p.toolInvocation} />
+        ))}
+      </div>
+    );
+  }
+
+  // All done: collapsible summary
   return (
-    <div className="mb-3 pl-2.5 border-l-2 border-slate-200 space-y-0.5">
-      {parts.map((p) => (
-        <ToolInvocationItem
-          key={p.toolInvocation.toolCallId}
-          invocation={p.toolInvocation}
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+      >
+        <ChevronRight
+          className={`w-3 h-3 flex-shrink-0 transition-transform duration-150 ${isOpen ? 'rotate-90' : ''}`}
         />
-      ))}
+        <span>
+          How I answered this ({n} step{n !== 1 ? 's' : ''})
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="mt-1.5 pl-2.5 border-l-2 border-slate-200 space-y-0.5">
+          {parts.map((p) => (
+            <ToolStep key={p.toolInvocation.toolCallId} invocation={p.toolInvocation} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

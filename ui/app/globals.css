@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Typing-indicator dots */
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.3; }
+  30%           { opacity: 1;   }
+}
+.typing-dot   { animation: typing-dot 1.4s ease-in-out infinite; }
+.typing-dot-2 { animation-delay: 0.2s; }
+.typing-dot-3 { animation-delay: 0.4s; }
+
+/* Message entrance animation */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.animate-fade-in { animation: fade-in 0.22s ease-out; }

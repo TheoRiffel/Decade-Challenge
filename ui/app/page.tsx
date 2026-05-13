@@ -2,10 +2,11 @@
 
 import { useChat } from '@ai-sdk/react';
 import type { ToolInvocationUIPart } from '@ai-sdk/ui-utils';
-import { BookOpen, Paperclip, Send, Upload } from 'lucide-react';
+import { AlertCircle, BookOpen, Paperclip, RefreshCw, Send, Upload } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AttachmentChip, AttachmentHistoryChip } from './components/AttachmentChip';
 import { DropZone } from './components/DropZone';
+import { MessageContent } from './components/MessageContent';
 import { SourcePanel, type ActiveSource } from './components/SourcePanel';
 import { ToolInvocationList } from './components/ToolInvocation';
 
@@ -41,27 +42,29 @@ function parseContent(content: string): { main: string; docIds: string[] } {
   return { main: content.slice(0, match.index).trimEnd(), docIds };
 }
 
+// ── Demo queries ──────────────────────────────────────────────────────────────
+
+const DEMO_QUERIES = [
+  'O que é um CDB e como funciona?',
+  'Compare CDB e CRA em termos de tributação',
+  'How is cryptocurrency taxed in Brazil?',
+] as const;
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
-  // Pending attachments (pre-send)
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
-
-  // Source panel
   const [activeSource, setActiveSource] = useState<ActiveSource | null>(null);
 
-  // Refs used inside stable callbacks
   const pendingFilesRef = useRef<File[]>([]);
-  pendingFilesRef.current = pendingFiles; // always current
+  pendingFilesRef.current = pendingFiles;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Attachment history: Nth user message → filenames that were attached
   const submitCount = useRef(0);
   const attachmentsBySubmitIdx = useRef(new Map<number, string[]>());
 
-  // Request-ID → message-ID mapping for /sources
   const pendingRequestId = useRef<string | null>(null);
   const requestIdByMessage = useRef(new Map<string, string>());
 
@@ -79,7 +82,6 @@ export default function ChatPage() {
       if (jsonBody.id) formData.append('requestId', jsonBody.id);
       for (const file of files) formData.append('files', file);
 
-      // Strip Content-Type so the browser sets the multipart boundary.
       const { 'Content-Type': _ct, ...restHeaders } = (
         (init?.headers ?? {}) as Record<string, string>
       );
@@ -95,20 +97,28 @@ export default function ChatPage() {
     [],
   );
 
-  const { messages, input, handleInputChange, handleSubmit: chatSubmit, status } =
-    useChat({
-      api: '/api/chat',
-      fetch: customFetch,
-      onResponse: (response) => {
-        pendingRequestId.current = response.headers.get('x-request-id');
-      },
-      onFinish: (message) => {
-        if (pendingRequestId.current) {
-          requestIdByMessage.current.set(message.id, pendingRequestId.current);
-          pendingRequestId.current = null;
-        }
-      },
-    });
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit: chatSubmit,
+    status,
+    error,
+    reload,
+    append: chatAppend,
+  } = useChat({
+    api: '/api/chat',
+    fetch: customFetch,
+    onResponse: (response) => {
+      pendingRequestId.current = response.headers.get('x-request-id');
+    },
+    onFinish: (message) => {
+      if (pendingRequestId.current) {
+        requestIdByMessage.current.set(message.id, pendingRequestId.current);
+        pendingRequestId.current = null;
+      }
+    },
+  });
 
   const isLoading = status === 'streaming' || status === 'submitted';
 
@@ -131,6 +141,16 @@ export default function ChatPage() {
       chatSubmit(e);
     },
     [input, chatSubmit],
+  );
+
+  // ── Suggestion chip submit ──────────────────────────────────────────────────
+  const submitSuggestion = useCallback(
+    (query: string) => {
+      if (isLoading) return;
+      submitCount.current += 1;
+      void chatAppend({ role: 'user', content: query });
+    },
+    [isLoading, chatAppend],
   );
 
   // ── File handling ───────────────────────────────────────────────────────────
@@ -184,13 +204,29 @@ export default function ChatPage() {
         </p>
       </header>
 
-      {/* DropZone wraps messages + input so the whole area is a drop target */}
       <DropZone onFiles={addFiles}>
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
           {messages.length === 0 && (
-            <div className="text-center text-gray-400 mt-20 text-sm">
-              Ask a question about Decade&apos;s investment convictions.
+            <div className="mt-16 flex flex-col items-center gap-6">
+              <p className="text-sm text-gray-400">
+                Ask a question about Decade&apos;s investment convictions.
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {DEMO_QUERIES.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => submitSuggestion(q)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 rounded-full border border-gray-200 bg-white text-xs text-gray-600
+                               hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50
+                               disabled:opacity-40 disabled:cursor-not-allowed
+                               transition-colors shadow-sm"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -217,18 +253,22 @@ export default function ChatPage() {
             return (
               <div
                 key={m.id}
-                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex animate-fade-in ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
+                  className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${
                     m.role === 'user'
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-blue-600 text-white whitespace-pre-wrap leading-relaxed'
                       : 'bg-white border border-gray-200 text-gray-800 shadow-sm'
                   }`}
                 >
-                  <ToolInvocationList parts={toolParts} />
+                  {isAssistant && <ToolInvocationList parts={toolParts} />}
 
-                  {main}
+                  {isAssistant ? (
+                    <MessageContent text={main} />
+                  ) : (
+                    main
+                  )}
 
                   {/* Attached files in user message history */}
                   {attachedNames.length > 0 && (
@@ -239,16 +279,14 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  {/* Citation pills for assistant messages */}
+                  {/* Citation pills */}
                   {docIds.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-1.5">
                       {docIds.map((docId) => {
                         const isUpload = docId.startsWith('uploaded/');
                         const isActive = activeSource?.docId === docId;
                         const Icon = isUpload ? Upload : BookOpen;
-                        const label = isUpload
-                          ? docId.replace('uploaded/', '')
-                          : docId;
+                        const label = isUpload ? docId.replace('uploaded/', '') : docId;
 
                         return (
                           <button
@@ -278,10 +316,15 @@ export default function ChatPage() {
             );
           })}
 
+          {/* Loading placeholder — pulsing dots */}
           {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
-                <span className="text-gray-400 text-sm">Thinking…</span>
+            <div className="flex justify-start animate-fade-in">
+              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3.5 shadow-sm">
+                <div className="flex gap-1.5 items-center h-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 typing-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 typing-dot typing-dot-2" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 typing-dot typing-dot-3" />
+                </div>
               </div>
             </div>
           )}
@@ -291,6 +334,24 @@ export default function ChatPage() {
 
         {/* Input area */}
         <div className="px-6 py-4 border-t border-gray-200 bg-white flex-shrink-0">
+          {/* Error banner */}
+          {error && (
+            <div className="mb-3 px-3.5 py-2.5 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-500" />
+              <p className="flex-1 text-xs text-red-700 min-w-0 line-clamp-2">
+                {error.message || 'Something went wrong. Please try again.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => reload()}
+                className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-red-700 hover:text-red-900 transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Retry
+              </button>
+            </div>
+          )}
+
           {/* Validation error */}
           {attachError && (
             <p className="mb-2 text-xs text-red-600">{attachError}</p>
@@ -310,7 +371,6 @@ export default function ChatPage() {
           )}
 
           <form onSubmit={handleSubmit} className="flex gap-2">
-            {/* Paperclip button */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -331,7 +391,7 @@ export default function ChatPage() {
               className="hidden"
               onChange={(e) => {
                 if (e.target.files) addFiles(Array.from(e.target.files));
-                e.target.value = ''; // allow re-selecting the same file
+                e.target.value = '';
               }}
             />
 

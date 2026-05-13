@@ -69,6 +69,16 @@ The architecture is built around a tool-using LLM that decides when to retrieve,
 ## 5. Architecture Overview
 
 ```
+        ┌─────────────────────────┐
+        │  Browser                │
+        │  Next.js UI (useChat)   │
+        │  - suggestion chips     │
+        │  - tool-call stream     │
+        │  - citation pills       │
+        │  - drag-and-drop upload │
+        └───────────┬─────────────┘
+                    │ POST /api/chat (rewrites → api:3000)
+                    ▼
                         ┌──────────────────┐
         request ───────▶│  POST /chat      │
                         │  (Hono)          │
@@ -97,6 +107,11 @@ The architecture is built around a tool-using LLM that decides when to retrieve,
                                                        │
                                                        ▼
                                               streamed response
+                                                       │
+                                                       ▼
+                                           Next.js UI renders
+                                           (markdown, tool steps,
+                                            citation pills)
 ```
 
 The agent sees the user's query, the conversation history, and a system prompt encoding Decade's grounding rules. It chooses which tools to call. The AI SDK manages the loop; we cap it at `stepCountIs(10)`.
@@ -504,7 +519,42 @@ Gemini File API parsers, persistent file storage. All flagged as easy v2 additio
 | `tools/parseUpload.ts` | `parse_upload` tool — reads from session, surfaces `truncated` flag |
 | `api/chat.ts` | Multipart handler, 25 MB limit, trace wiring |
 
-## 16. Observability
+## 16. UI Layer
+
+The `ui/` directory is a Next.js 15 app (App Router, TypeScript, Tailwind) that provides the browser-facing chat interface.
+
+### Streaming protocol
+
+The API streams a Vercel AI SDK data-stream response from `POST /chat`. The UI consumes it via `useChat` from `@ai-sdk/react`, which reconstructs the message list (including interleaved tool-invocation parts) as chunks arrive over HTTP. No WebSockets; SSE-like chunked transfer.
+
+### Key components
+
+| File | Purpose |
+|---|---|
+| `app/page.tsx` | Root chat page — `useChat` wiring, submit logic, multipart fetch override |
+| `components/ToolInvocation.tsx` | Live tool-call list during streaming; collapses to "How I answered this (N steps)" toggle when done |
+| `components/MessageContent.tsx` | Lightweight inline markdown renderer — bold, italic, headings, bullet/ordered lists |
+| `components/SourcePanel.tsx` | Side-drawer that fetches `/api/sources/:traceId` and shows retrieved chunks + scores |
+| `components/AttachmentChip.tsx` | Pre-send file chip (with remove) and history chip (read-only) |
+| `components/DropZone.tsx` | Wraps the chat area; accepts drag-and-drop files |
+
+### Rewrite proxy
+
+`next.config.js` proxies `/api/chat` → `http://api:3000/chat` and `/api/sources/:traceId` → `http://api:3000/sources/:traceId`. The browser only ever talks to the Next.js server; the Hono API is internal to the Docker network. The proxy destination is baked in at `next build` time via the `API_URL` Docker build-arg (defaults to `http://api:3000`; override locally with `API_URL=http://localhost:3000`).
+
+### UX features
+
+- **Suggestion chips** — three demo queries shown when the chat is empty. Click → `append()` directly (no form submit needed).
+- **Pulsing loading placeholder** — three opacity-cycling dots while waiting for the first token.
+- **Error banner with retry** — `useChat`'s `error` state surfaces a red banner; the Retry button calls `reload()`.
+- **Markdown rendering** — bold, italic, headings, and bullet/numbered lists rendered as proper HTML; no external markdown library.
+- **Fade-in animation** — each new message animates in with a 22 ms ease-out translate + opacity.
+
+### Standalone Docker build
+
+The Dockerfile in `ui/` uses `output: 'standalone'` in Next.js, which writes a self-contained server to `.next/standalone/`. The runtime stage copies that directory and runs `node server.js` — no `npm start`, no `next` binary needed in the image.
+
+## 17. Observability
 
 Every request gets a `trace` object that captures:
 
@@ -516,7 +566,7 @@ Logged as structured JSON. For v1, console + a JSONL file is sufficient. For v2,
 
 This is non-optional. Agentic systems are debuggable only insofar as their traces are. A request with surprising output should be reproducible from its trace alone.
 
-## 17. Evaluation
+## 18. Evaluation
 
 `npm run eval` runs `eval/golden.json` through the full agent pipeline and reports:
 
@@ -536,7 +586,7 @@ Golden set composition (target ~50 cases):
 
 CI runs eval on PRs. Faithfulness regression > 2 percentage points blocks merge.
 
-## 18. Forward-Looking Swap Points
+## 19. Forward-Looking Swap Points
 
 Each is a single-file or single-module change.
 
@@ -552,26 +602,26 @@ Each is a single-file or single-module change.
 
 The agentic shape is durable. Most evolutions are tool additions, not architectural rewrites.
 
-## 19. Pragmatic Limitations to Flag in README
+## 20. Pragmatic Limitations to Flag in README
 
 - Reranker and embeddings are self-hosted via HF Text Embeddings Inference (BAAI/bge-m3, BAAI/bge-reranker-v2-m3). No managed-API rate limits, but ops responsibility for the TEI containers; CPU inference is workable for v1's corpus (~600 chunks) but GPU is recommended at scale.
 - Single-Postgres deployment doesn't scale past ~1M chunks → flag horizontal-scale path.
 - Eval harness uses LLM-as-judge → flag the cost; propose RAGAS or ARES for v2.
 - File uploads are in-memory only → flag the path to ephemeral per-session indexes.
 - No conversation persistence → flag the path to a sessions table.
-- No streaming UI in v1 — API streams, but reference UI is minimal.
+- Streaming UI is live in v1.1 (Next.js `useChat`, tool-call panel, citation pills, drag-and-drop).
 - No prompt caching on the agent loop in v1. Anthropic caching on multi-turn agent calls is doable; flagged as an early optimization.
 
-## 20. Out of Scope for v1
+## 21. Out of Scope for v1
 
 - Authentication, RBAC, multi-tenancy.
 - Persistent conversation history across sessions.
 - Fine-tuning of any kind.
 - GraphRAG, ColPali, two-stage verification, Self-RAG — flagged in README as v2 candidates.
 - Composite tools (`compare`, `summarize_corpus`). The agent composes from primitives.
-- Streaming UI beyond a minimal reference page.
+- Streaming UI beyond the current implementation (streaming responses, session memory).
 
-## 21. Build Order
+## 22. Build Order
 
 For Claude Code, in this sequence:
 

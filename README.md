@@ -172,45 +172,25 @@ npm run dev
 
 ---
 
+## UI features
+
+The chat UI at `http://localhost:3000` includes three notable features:
+
+**Live tool-call streaming.** While the agent is working, each tool invocation appears in real time with a pulsing indicator — you can see the agent searching for `"CDB"` or reading `cdbs_quick_guide` before the answer arrives. After the response completes, the steps collapse into a "How I answered this (N steps)" toggle so the response stays clean.
+
+**Citation source drill-down.** Every in-scope answer ends with citation pills (emerald for conviction documents, amber for uploaded files). Click any pill to open a side panel showing the exact retrieved chunks and their reranker scores — the grounding evidence the agent used.
+
+**Drag-and-drop file upload.** Drop a PDF or Excel file anywhere on the page (or use the paperclip button) to attach it to the next message. The agent reads it via `parse_upload` and cites it as `uploaded/<filename>`, distinct from the conviction corpus.
+
+> Screenshots: capture them from `http://localhost:3000` after `docker compose up`. A short screen recording covering a PT query, a file upload, and an out-of-scope disclaimer covers the full demo path.
+
+---
+
 ## Testing it
 
-### JSON requests
+### In the UI (primary)
 
-```bash
-curl -s -X POST http://localhost:3000/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      { "role": "user", "content": "O que é um CDB e como funciona?" }
-    ]
-  }' | jq .response
-```
-
-### With a file upload
-
-```bash
-curl -s -X POST http://localhost:3000/chat \
-  -F 'messages=[{"role":"user","content":"Analise minha carteira comparando com as convicções da Decade."}]' \
-  -F 'files=@portfolio.pdf' | jq .response
-```
-
-### Multi-turn conversation
-
-Pass the full message history in the `messages` array:
-
-```bash
-curl -s -X POST http://localhost:3000/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      { "role": "user",      "content": "How does Tesouro Direto work?" },
-      { "role": "assistant", "content": "..." },
-      { "role": "user",      "content": "Which bonds are best for inflation protection?" }
-    ]
-  }'
-```
-
-### Suggested test questions
+After `docker compose up`, open **http://localhost:3000** and click one of the three suggestion chips, or type your own query. The agent's tool calls stream live above the response.
 
 | # | Query | Expected behaviour |
 |---|---|---|
@@ -223,7 +203,24 @@ curl -s -X POST http://localhost:3000/chat \
 | 7 | `Should I buy Bitcoin now?` | Borderline — searches, then disclaims on timing |
 | 8 | `What is the boiling point of water?` | Out-of-scope, ⚠️ disclaimer, no Sources |
 | 9 | `Me dê uma receita de feijoada.` | Out-of-scope PT, ⚠️ disclaimer |
-| 10 | Upload a PDF portfolio + ask the agent to compare it against Decade's convictions | File upload path |
+| 10 | Drop a PDF portfolio on the page + ask to compare with Decade's convictions | File upload path |
+
+### Via curl (API-only testing)
+
+```bash
+# Simple JSON request
+curl -s -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"O que é um CDB e como funciona?"}]}' \
+  | jq .response
+
+# With a file upload
+curl -s -X POST http://localhost:3000/chat \
+  -F 'messages=[{"role":"user","content":"Analise minha carteira comparando com as convicções da Decade."}]' \
+  -F 'files=@portfolio.pdf' | jq .response
+```
+
+Note: the `curl` target is the **API** port when running manually (`:3000`). When running via Docker Compose, the API is internal-only — test through the UI or add a temporary `ports` entry to the api service.
 
 ---
 
@@ -270,6 +267,12 @@ tool_call_efficiency     13/14 (93%) 0.95
 **Limits:** 25 MB per file (API layer). Content exceeding ~50 K tokens is truncated with an inline note; the agent is told when this happens.
 
 **Namespace separation:** upload citations use `uploaded/<filename>` in the `Sources:` footer, distinct from conviction document IDs. The validation layer enforces this — it strips `uploaded/<filename>` if the agent cites a file it never actually read via `parse_upload`.
+
+---
+
+## Deployment
+
+Coming soon — see [`docs/deployment-railway.md`](docs/deployment-railway.md) for the Railway guide once Step 7 (local Docker Compose) is validated.
 
 ---
 
