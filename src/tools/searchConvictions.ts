@@ -42,33 +42,38 @@ export const searchConvictionsTool = tool({
     query,
     language_hint,
     top_k,
-  }): Promise<SearchConvictionsHit[]> => {
-    const candidates = await hybridRetrieve({
-      query,
-      languageHint: language_hint,
-      topK: CANDIDATE_POOL_SIZE,
-    });
-    if (candidates.length === 0) return [];
+  }): Promise<SearchConvictionsHit[] | { error: string }> => {
+    try {
+      const candidates = await hybridRetrieve({
+        query,
+        languageHint: language_hint,
+        topK: CANDIDATE_POOL_SIZE,
+      });
+      if (candidates.length === 0) return [];
 
-    const ranked = await reranker.rerank(
-      query,
-      candidates.map((c) => c.content),
-      top_k,
-    );
+      const ranked = await reranker.rerank(
+        query,
+        candidates.map((c) => c.content),
+        top_k,
+      );
 
-    return ranked.map((r) => {
-      const chunk = candidates[r.index];
-      if (!chunk) {
-        throw new Error(
-          `reranker returned out-of-range index ${r.index} (pool=${candidates.length})`,
-        );
-      }
-      return {
-        document_id: chunk.documentId,
-        chunk_id: chunk.chunkId,
-        content: chunk.content,
-        score: r.score,
-      };
-    });
+      return ranked.map((r) => {
+        const chunk = candidates[r.index];
+        if (!chunk) {
+          throw new Error(
+            `reranker returned out-of-range index ${r.index} (pool=${candidates.length})`,
+          );
+        }
+        return {
+          document_id: chunk.documentId,
+          chunk_id: chunk.chunkId,
+          content: chunk.content,
+          score: r.score,
+        };
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: `search_convictions failed: ${message}` };
+    }
   },
 });

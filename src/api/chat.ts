@@ -1,9 +1,11 @@
+import { cors } from 'hono/cors';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { runAgent } from '../agent/loop.js';
 import { config, fileParser } from '../config.js';
 import { traceSink } from '../observability/index.js';
 import { createTrace } from '../observability/trace.js';
+import { putTrace } from '../observability/traceStore.js';
 import { FileParseError } from '../uploads/parse.js';
 import { createUploadSession } from '../uploads/session.js';
 
@@ -12,7 +14,10 @@ const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
-  content: z.string().min(1),
+  // Allow empty string: useChat keeps partially-streamed assistant messages
+  // (content:"") in state when a response errors mid-stream, and sends them
+  // back on the next turn.
+  content: z.string(),
 });
 
 const chatRequestSchema = z.object({
@@ -22,12 +27,23 @@ const chatRequestSchema = z.object({
 
 export const chatRouter = new Hono();
 
+chatRouter.use(
+  cors({
+    origin: 'http://localhost:3001',
+    allowMethods: ['POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type'],
+  }),
+);
+
 /**
  * POST /chat
  *
  * Accepts two content types:
  *   application/json      — { messages, requestId? }
  *   multipart/form-data   — messages (JSON string) + requestId? + file attachments
+ *
+ * Returns a Vercel AI SDK data stream (compatible with useChat). The
+ * request ID is carried in the X-Request-Id response header.
  *
  * File attachments become an UploadSession passed to the agent. The agent
  * accesses them via the parse_upload tool. Files are dropped after the
@@ -150,22 +166,26 @@ chatRouter.post('/', async (c) => {
     });
   }
 
-  // --- Run agent ---
+  // --- Stream agent response ---
   const hasUploads = session.list().length > 0;
 
   try {
-    const result = await runAgent({
+    const result = runAgent({
       messages,
       trace,
       ...(hasUploads ? { uploads: session } : {}),
+      onDone: (snapshot) => {
+        putTrace(snapshot);
+        return traceSink.write(snapshot);
+      },
     });
-    await traceSink.write(result.trace);
-    return c.json({
-      response: result.response,
-      validation: result.validation,
-      requestId: trace.requestId,
+
+    return result.toDataStreamResponse({
+      headers: { 'X-Request-Id': trace.requestId },
     });
   } catch (err) {
+    // Only synchronous setup errors reach here; stream-time errors flow
+    // through the data stream format automatically.
     const message = err instanceof Error ? err.message : String(err);
     const partialSnapshot = trace.finish(`<error: ${message}>`);
     await traceSink.write(partialSnapshot).catch(() => undefined);

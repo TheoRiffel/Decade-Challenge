@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { runAgent } from '../agent/loop.js';
 import { client } from '../db/index.js';
-import { createTrace } from '../observability/trace.js';
+import { createTrace, type TraceSnapshot } from '../observability/trace.js';
 import {
   disclaimerPresence,
   faithfulness,
@@ -44,21 +44,30 @@ async function runCase(c: GoldenCase): Promise<CaseResult> {
   const t0 = performance.now();
   try {
     const trace = createTrace({ userMessage: c.query });
-    const result = await runAgent({
+    let resolveSnapshot!: (s: TraceSnapshot) => void;
+    const whenDone = new Promise<TraceSnapshot>((res) => { resolveSnapshot = res; });
+
+    const stream = runAgent({
       messages: [{ role: 'user', content: c.query }],
       trace,
+      onDone: (snapshot) => resolveSnapshot(snapshot),
     });
+
+    // Consuming stream.text drives the AI SDK loop and fires onFinish / onDone.
+    await stream.text;
+    const snapshot = await whenDone;
+
     const metrics = await Promise.all([
-      faithfulness(result.trace, c),
-      scopeBehavior(result.trace, c),
-      sourcePrecision(result.trace, c),
-      disclaimerPresence(result.trace, c),
-      languageMatch(result.trace, c),
-      toolCallEfficiency(result.trace, c),
+      faithfulness(snapshot, c),
+      scopeBehavior(snapshot, c),
+      sourcePrecision(snapshot, c),
+      disclaimerPresence(snapshot, c),
+      languageMatch(snapshot, c),
+      toolCallEfficiency(snapshot, c),
     ]);
     return {
       case: c,
-      response: result.response,
+      response: snapshot.finalResponse,
       metrics,
       durationMs: Math.round(performance.now() - t0),
     };

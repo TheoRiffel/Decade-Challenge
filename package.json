@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:ui": "npm --prefix ui run dev",
     "start": "node dist/server.js",
     "build": "tsc",
     "test": "vitest run",

@@ -1,10 +1,10 @@
 import { config, llm } from '../config.js';
 import { detectLanguage } from '../lib/language.js';
 import {
-  generateText,
+  streamText,
   type CoreMessage,
 } from '../providers/llm.js';
-import type { Trace, TraceSnapshot, ValidationResult } from '../observability/trace.js';
+import type { Trace, TraceSnapshot } from '../observability/trace.js';
 import { buildTools } from '../tools/index.js';
 import type { UploadSession } from '../uploads/session.js';
 import { agentSystemPrompt } from './systemPrompt.js';
@@ -19,28 +19,24 @@ export type AgentArgs = {
   messages: AgentMessage[];
   uploads?: UploadSession;
   trace: Trace;
-};
-
-export type AgentResult = {
-  response: string;
-  validation: ValidationResult;
-  trace: TraceSnapshot;
+  /** Called after the stream ends with the finalised, validated trace snapshot. */
+  onDone?: (snapshot: TraceSnapshot) => Promise<void> | void;
 };
 
 /**
  * The single agentic orchestration entry point (ARCHITECTURE.md §9).
  *
- * generateText drives the tool-loop; we cap iterations with maxSteps. Each
- * step's tool calls + results are fed to trace.recordStep via onStepFinish.
- * After the loop, validateAndFinalize runs the §12 post-checks.
+ * streamText drives the tool-loop; we cap iterations with maxSteps. Each
+ * step's tool calls + results are recorded to trace via onStepFinish.
+ * After the loop ends, onFinish runs validateAndFinalize (§12), closes
+ * the trace, and calls onDone so the caller can write the snapshot to its
+ * sink without this module knowing about the sink.
  *
  * Per ARCHITECTURE.md §6, this file is the ONLY permitted importer of
- * generateText / tools from the `ai` package outside providers/. The arch's
- * stopWhen + stepCountIs idiom is AI SDK v5+; on v4.3 we use maxSteps
- * (semantically equivalent — same hard cap on iterations).
+ * streamText / tools from the `ai` package outside providers/.
  */
-export async function runAgent(args: AgentArgs): Promise<AgentResult> {
-  const { messages, uploads, trace } = args;
+export function runAgent(args: AgentArgs) {
+  const { messages, uploads, trace, onDone } = args;
 
   const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
   const userMessage = lastUserMessage?.content ?? '';
@@ -57,11 +53,14 @@ export async function runAgent(args: AgentArgs): Promise<AgentResult> {
     uploadedFiles ? { uploadedFiles } : {},
   );
 
+  // Filter out messages with empty content: useChat@1.x keeps partially-
+  // streamed assistant messages (content:"") in state when a response errors
+  // mid-stream. Passing them to the LLM causes an Anthropic API 400.
   const conversationMessages: CoreMessage[] = messages
-    .filter((m) => m.role !== 'system')
+    .filter((m) => m.role !== 'system' && m.content.trim() !== '')
     .map((m) => ({ role: m.role, content: m.content }));
 
-  const result = await generateText({
+  return streamText({
     model: llm.agentModel,
     system,
     messages: conversationMessages,
@@ -73,20 +72,15 @@ export async function runAgent(args: AgentArgs): Promise<AgentResult> {
         toolResults: step.toolResults as unknown[],
       });
     },
+    onFinish: async ({ text, usage }) => {
+      trace.recordTokens({
+        inputTokens: usage.promptTokens,
+        outputTokens: usage.completionTokens,
+      });
+      const { response, validation } = validateAndFinalize({ trace, response: text, userMessage });
+      trace.recordValidation(validation);
+      const snapshot = trace.finish(response);
+      await onDone?.(snapshot);
+    },
   });
-
-  trace.recordTokens({
-    inputTokens: result.usage.promptTokens,
-    outputTokens: result.usage.completionTokens,
-  });
-
-  const { response, validation } = validateAndFinalize({
-    trace,
-    response: result.text,
-    userMessage,
-  });
-  trace.recordValidation(validation);
-
-  const snapshot = trace.finish(response);
-  return { response, validation, trace: snapshot };
 }

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { chatRouter } from './api/chat.js';
+import { sourcesRouter } from './api/sources.js';
 import { config } from './config.js';
 
 const app = new Hono();
@@ -11,6 +12,7 @@ app.get('/health', (c) =>
 );
 
 app.route('/chat', chatRouter);
+app.route('/sources', sourcesRouter);
 
 serve({ fetch: app.fetch, port: config.port });
 console.log(

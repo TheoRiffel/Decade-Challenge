@@ -8,7 +8,7 @@ import type { LanguageModel } from 'ai';
  * ARCHITECTURE.md §6, the only other permitted importer of `ai`'s
  * generation primitives is agent/loop.ts.
  */
-export { generateText, tool } from 'ai';
+export { generateText, streamText, tool } from 'ai';
 export type { CoreMessage, Tool, ToolSet } from 'ai';
 
 /**
