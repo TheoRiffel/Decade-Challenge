@@ -1,14 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   async rewrites() {
+    const apiUrl = process.env.API_URL ?? 'http://localhost:3000';
     return [
       {
         source: '/api/chat',
-        destination: 'http://localhost:3000/chat',
+        destination: `${apiUrl}/chat`,
       },
       {
         source: '/api/sources/:traceId',
-        destination: 'http://localhost:3000/sources/:traceId',
+        destination: `${apiUrl}/sources/:traceId`,
       },
     ];
   },

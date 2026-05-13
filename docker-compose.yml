@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_PASSWORD: DecadeChallenge
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    command: --model-id BAAI/bge-m3
+    volumes:
+      - embed-cache:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:80/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
+
+  reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    command: --model-id BAAI/bge-reranker-base
+    volumes:
+      - rerank-cache:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:80/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:DecadeChallenge@postgres:5432/postgres
+      EMBEDDINGS_BASE_URL: http://embeddings:80
+      RERANKER_BASE_URL: http://reranker:80
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      PORT: "3000"
+      LOG_LEVEL: info
+      TRACE_FILE: ./logs/traces.jsonl
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      embeddings:
+        condition: service_healthy
+      reranker:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+      args:
+        API_URL: http://api:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  embed-cache:
+  rerank-cache:

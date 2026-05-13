@@ -72,12 +72,34 @@ At ingestion, each document is chunked by Markdown structure, each chunk is cont
 
 ---
 
-## Setup
+## Quick start
+
+### Prerequisites
+
+- Docker (with Compose v2)
+- An `ANTHROPIC_API_KEY`
+
+```bash
+git clone <repo>
+cd Decade-Challenge
+cp .env.example .env   # then set ANTHROPIC_API_KEY=sk-ant-...
+docker compose up
+```
+
+Open **http://localhost:3000**.
+
+First run takes 5–10 minutes while Docker pulls images and both BGE models download (~1.5 GB each). Subsequent runs start in ~30 seconds because the model weights are cached in named volumes (`embed-cache`, `rerank-cache`).
+
+> **Note:** The embedding model (`bge-m3`) uses ~5 GB RAM on CPU. The reranker adds another ~1–2 GB. 8 GB total RAM is the practical minimum.
+
+---
+
+## Manual setup (without Docker)
 
 ### Prerequisites
 
 - Node.js ≥ 20
-- Docker
+- Docker (for the infrastructure services)
 - An `ANTHROPIC_API_KEY`
 
 ### 1. Infrastructure
