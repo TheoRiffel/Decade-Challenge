@@ -34,9 +34,9 @@ sourcesRouter.use(
  * from the trace's recorded tool call outputs. Called lazily by the frontend
  * when a citation pill is clicked.
  */
-sourcesRouter.get('/:traceId', (c) => {
+sourcesRouter.get('/:traceId', async (c) => {
   const traceId = c.req.param('traceId');
-  const trace = getTrace(traceId);
+  const trace = await getTrace(traceId);
 
   if (!trace) {
     return c.json({ error: `Trace "${traceId}" not found (may have expired).` }, 404);

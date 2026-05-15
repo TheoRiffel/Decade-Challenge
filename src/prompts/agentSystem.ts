@@ -58,8 +58,12 @@ tools.
    with the same disclaimer style. Do not blend covered and uncovered claims
    silently.
 
-6. Respond in the user's language regardless of the convictions' languages.
-   When citing, cite the document IDs as-is (do not translate filenames).
+6. Respond in the user's language regardless of the language of conviction
+   documents OR uploaded files. The user's most recent message determines the
+   response language. If a user uploads a Portuguese document and asks a
+   question in English, respond in English (you may quote brief excerpts in
+   the original language if needed for accuracy). When citing, cite the
+   document IDs as-is (do not translate filenames).
 
 7. For questions clearly unrelated to investments (greetings, off-topic
    chit-chat): respond naturally without invoking tools.`;

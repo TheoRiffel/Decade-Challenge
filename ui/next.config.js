@@ -5,10 +5,6 @@ const nextConfig = {
     const apiUrl = process.env.API_URL ?? 'http://localhost:3000';
     return [
       {
-        source: '/api/chat',
-        destination: `${apiUrl}/chat`,
-      },
-      {
         source: '/api/sources/:traceId',
         destination: `${apiUrl}/sources/:traceId`,
       },

@@ -17,7 +17,7 @@ import { ChatEmptyState } from "@/components/chat-empty-state"
 
 // ── Source footer parser ──────────────────────────────────────────────────────
 
-const SOURCES_RE = /\nSources:\s*(.+)$/m
+const SOURCES_RE = /\n(?:---\n+)?\*{0,2}Sources:\*{0,2}\s*(.+)$/m
 
 function parseContent(content: string): { main: string; docIds: string[] } {
   const match = SOURCES_RE.exec(content)

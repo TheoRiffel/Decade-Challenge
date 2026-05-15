@@ -14,7 +14,10 @@ app.get('/health', (c) =>
 app.route('/chat', chatRouter);
 app.route('/sources', sourcesRouter);
 
-serve({ fetch: app.fetch, port: config.port });
+const server = serve({ fetch: app.fetch, port: config.port });
+// Disable Nagle's algorithm so each streamed token is sent immediately
+// instead of being coalesced into larger TCP segments.
+server.on('connection', (socket) => socket.setNoDelay(true));
 console.log(
   `decade-conviction-assistant listening on :${config.port} (log level: ${config.logLevel})`,
 );

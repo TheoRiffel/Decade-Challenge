@@ -18,7 +18,7 @@ const DISCLAIMER_EN =
 const DISCLAIMER_PT =
   '⚠️ Este tópico não está coberto pelas convicções da Decade. Respondendo com base em conhecimento geral.';
 
-const SOURCES_LINE_RE = /^Sources:\s*(.+)$/m;
+const SOURCES_LINE_RE = /^\*{0,2}Sources:\*{0,2}\s*(.+)$/m;
 const TRIVIAL_OPENERS_RE =
   /^(oi|ol[aá]|hello|hi|hey|good\s+(morning|afternoon|evening)|bom\s+(dia|tarde|noite))\b/i;
 
@@ -73,7 +73,10 @@ export function validateAndFinalize(args: ValidateArgs): ValidateResult {
     responseLang === 'other' ||
     responseLang === userLang;
   if (!languageMatchOk) {
-    warnings.push(`language mismatch: user=${userLang}, response=${responseLang}`);
+    warnings.push(
+      `language mismatch: user=${userLang} ("${userMessage.slice(0, 60)}..."), ` +
+        `response=${responseLang}`,
+    );
   }
 
   const validation: ValidationResult = {

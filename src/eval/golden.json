@@ -93,5 +93,12 @@
     "expectedScope": "borderline",
     "expectedLanguage": "en",
     "expectedDocumentIds": ["crypto_taxation_brazil"]
+  },
+  {
+    "id": "cross_lang_upload_pt_doc_en_query",
+    "query": "Read the attached PDF and analyze it from Decade's perspective.",
+    "expectedScope": "borderline",
+    "expectedLanguage": "en",
+    "notes": "User uploads a PT document and asks in EN. Response must be EN. skipped: file upload not yet supported in eval harness — flag for v2."
   }
 ]
