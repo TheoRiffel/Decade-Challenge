@@ -19,10 +19,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ARG API_URL=http://api:3000
+ENV API_URL=${API_URL}
 
 # next build --output standalone writes a self-contained server to .next/standalone
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 CMD ["node", "server.js"]
